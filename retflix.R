@@ -36,17 +36,17 @@ getRecommendation <- function () {
   }
 
   similarities <- c(numeric(0))
-  for (user_id in seq(1, length(df))) {
-    user_ratings <- df[user_id][indices, 1]
+  for (user_id in row.names(df)) {
+    user_ratings <- df[user_id, indices]
     similarities <- c(similarities, jaccardSimilarity(me, user_ratings))
   }
-  # result <- data.frame(similarities)
-  suggestions <- df[, which(similarities == max(similarities))]
+  suggestions <- df[which(similarities == max(similarities)), ]
   if (is.data.frame(suggestions)) {
     # more than one user with same max similarity, we get the first one
-    suggestions <- as.array(suggestions[, 1])
+    suggestions <- suggestions[1, ]
   }
   suggestions <- as.logical(suggestions)
+  
   # remove suggestions of movies you already watched it
   for (i in seq(1, totalQuestions)) {
     ind <- indices[i]
@@ -54,8 +54,9 @@ getRecommendation <- function () {
   }
   
   cat("\n********************************************************\n")
-  cat("System strongly recommend to you the following title(s):\n")
-  cat(paste(movies[suggestions], collapse=", "))
+  cat("System strongly recommend to you the following title(s):")
+  cat("\n********************************************************\n")
+  cat(paste(movies[suggestions], collapse="\n"))
   cat("\n\nWant to try again?\n")
   printMenu()
 }
@@ -86,14 +87,23 @@ printMenu <- function () {
   )
 }
 
-# Create a fake dataset with movies
-movies <- c("Saving Private Ryan", "Stranger Things", "Jurassic World",  "Platoon",  "Pulp Fiction", "Jumanji", "Toy Story", "Star Wars")
-David <- c(1, 0, 0, 1, 1, 0, 0, 0)
-Zach <- c(0, 1, 1, 0, 0, 0, 0, 1)
-Jose <- c(0, 0, 0, 0, 1, 1, 0, 0)
-df <- data.frame(David, Zach, Jose)
-row.names(df) <- movies
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) == 1 & identical(args[1], "--test")) {
+  # Create a fake dataset with some data
+  movies <- c("Saving Private Ryan", "Underworld", "Jurassic World",  "Platoon",  "Pulp Fiction",
+              "Jumanji", "Toy Story", "Star Wars")
+  df <- data.frame(matrix(NA, nrow=3, ncol=length(movies)))
+  colnames(df) <- movies
+  rownames(df) <- c("David", "Zach", "Jose")
+  df["David", ] <- c(1, 0, 0, 1, 1, 0, 0, 0)
+  df["Zach", ] <- c(0, 1, 1, 0, 0, 0, 0, 1)
+  df["Jose", ] <- c(0, 0, 0, 0, 1, 1, 0, 0)
+} else {
+  # By default, read dataset from file
+  df <- read.csv("movie_ratings.csv", header=T, row.names=1, check.names=F)
+  movies <- as.array(colnames(df))
+}
 
-cat("\n\nWelcome to (R)etFlix, a movie & series recommendation system developed in R lang\n")
-cat("********************************************************************************\n")
+cat("\n\nWelcome to (R)etFlix, a movie recommendation system developed in R lang\n")
+cat("***************************************************************************\n")
 printMenu()
