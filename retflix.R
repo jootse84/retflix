@@ -1,6 +1,12 @@
+# The program recommends to you a movie list based on the responses about movies that you have already seen.
+# How it works? It calculates the similarity between your responses and other users in the system, and recommends to you 
+# movies from the user with higher similarity (jaccard index similarity: https://en.wikipedia.org/wiki/Jaccard_index).
+
+## How to run it? > Rscript retflix.R
+## Use --test command parameter to use for the user data frame a small sample with 8 movies and 3 users.
 
 getRecommendation <- function () {
-  
+
   movieQuestion <- function (movie) {
     result <- 0
     switch(readkey(paste("\nHave you ever seen '", movie, "'?\nType 'y' - yes\nType 'n' - no\n\n> ", collapse="")),
@@ -15,7 +21,7 @@ getRecommendation <- function () {
     )
     result
   }
-  
+
   jaccardSimilarity <- function (user1, user2) {
     sums <- user1 + user2
     similarity <- length(sums[sums==2])
@@ -26,33 +32,35 @@ getRecommendation <- function () {
     }
     result
   }
-  
-  totalQuestions <- 4
-  indices <- sample(1:length(movies), totalQuestions)
-  me <- rep(0, totalQuestions)
+
   cat("Please answer these questions to calculate your movie recommendation list...\n")
+  totalQuestions <- 4
+  indices <- sample(1:length(movies), totalQuestions) # pick 4 random movies by its indexes
+  me <- rep(0, totalQuestions)
   for (i in seq(1, totalQuestions)) {
     me[i] <- movieQuestion(movies[indices[i]])
   }
 
   similarities <- c(numeric(0))
+  # for every user, calculate its jaccard similarity based on the 4 random movies
   for (user_id in row.names(df)) {
     user_ratings <- df[user_id, indices]
     similarities <- c(similarities, jaccardSimilarity(me, user_ratings))
   }
+  # system chooses as suggestions, the movies watched from the user with more similarity
   suggestions <- df[which(similarities == max(similarities)), ]
   if (is.data.frame(suggestions)) {
     # more than one user with same max similarity, we get the first one
     suggestions <- suggestions[1, ]
   }
   suggestions <- as.logical(suggestions)
-  
-  # remove suggestions of movies you already watched it
+
+  # remove suggestions of movies you already watched it (from previous questions)
   for (i in seq(1, totalQuestions)) {
     ind <- indices[i]
     suggestions[ind] <- suggestions[ind] && !as.logical(me[i])
   }
-  
+
   cat("\n********************************************************\n")
   cat("System strongly recommend to you the following title(s):")
   cat("\n********************************************************\n")
