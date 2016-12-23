@@ -7,59 +7,77 @@
 
 getRecommendation <- function () {
 
-  movieQuestion <- function (movie) {
-    result <- 0
-    switch(readkey(paste("\nHave you ever seen '", movie, "'?\nType 'y' - yes\nType 'n' - no\n\n> ", collapse="")),
-      y={
-        result <- 1
-      },
-      n={},
-      {
-        cat("\nOption not identified, please try again.")
-        movieQuestion(movie)
-      }
-    )
-    result
-  }
+  # returns vector with the responses in order about the movies selected by the ids from indices
+  movieSurvey <- function (indices, movies) {
 
-  jaccardSimilarity <- function (user1, user2) {
-    sums <- user1 + user2
-    similarity <- length(sums[sums==2])
-    total <- length(sums[sums==1]) + similarity
-    result <- similarity/total
-    if (is.nan(result)) {
+    movieQuestion <- function (movie) {
       result <- 0
+      switch(readkey(paste("\nHave you ever seen '", movie, "'?\nType 'y' - yes\nType 'n' - no\n\n> ", collapse="")),
+        y={
+          result <- 1
+        },
+        n={},
+        {
+          cat("\nOption not identified, please try again.")
+          movieQuestion(movie)
+        }
+      )
+      result
     }
-    result
+
+    cat("Please answer these questions to calculate your movie recommendation list...\n")
+    survey <- rep(0, length(indices))
+    for (i in seq(1, length(indices))) {
+      survey[i] <- movieQuestion(movies[indices[i]])
+    }
+    survey
   }
 
-  cat("Please answer these questions to calculate your movie recommendation list...\n")
+  # returns the vector with the similarity value between every single user and the survey responses
+  getSimilarities <- function (survey, users) {
+
+    jaccardSimilarity <- function (user1, user2) {
+      sums <- user1 + user2
+      similarity <- length(sums[sums==2])
+      total <- length(sums[sums==1]) + similarity
+      result <- similarity/total
+      if (is.nan(result)) {
+        result <- 0
+      }
+      result
+    }
+
+    similarities <- c(numeric(0))
+    # for every user, calculate its similarity based on the selected random movies
+    for (user_id in row.names(users)) {
+      user_ratings <- users[user_id, ]
+      similarities <- c(similarities, jaccardSimilarity(survey, user_ratings))
+    }
+    similarities
+  }
+
+  # returns the suggestion list: movies watched from the user with more similarity
+  getSuggestions <- function (df, similarities, survey, indices) {
+    suggestions <- df[which(similarities == max(similarities)), ]
+    if (is.data.frame(suggestions)) {
+      # more than one user with same max similarity, we get the first one
+      suggestions <- suggestions[1, ]
+    }
+    suggestions <- as.logical(suggestions)
+
+    # remove suggestions of movies you already watched it (from previous questions)
+    for (i in seq(1, length(indices))) {
+      ind <- indices[i]
+      suggestions[ind] <- suggestions[ind] && !as.logical(survey[i])
+    }
+    suggestions
+  }
+
   totalQuestions <- 4
   indices <- sample(1:length(movies), totalQuestions) # pick 4 random movies by its indexes
-  me <- rep(0, totalQuestions)
-  for (i in seq(1, totalQuestions)) {
-    me[i] <- movieQuestion(movies[indices[i]])
-  }
-
-  similarities <- c(numeric(0))
-  # for every user, calculate its jaccard similarity based on the 4 random movies
-  for (user_id in row.names(df)) {
-    user_ratings <- df[user_id, indices]
-    similarities <- c(similarities, jaccardSimilarity(me, user_ratings))
-  }
-  # system chooses as suggestions, the movies watched from the user with more similarity
-  suggestions <- df[which(similarities == max(similarities)), ]
-  if (is.data.frame(suggestions)) {
-    # more than one user with same max similarity, we get the first one
-    suggestions <- suggestions[1, ]
-  }
-  suggestions <- as.logical(suggestions)
-
-  # remove suggestions of movies you already watched it (from previous questions)
-  for (i in seq(1, totalQuestions)) {
-    ind <- indices[i]
-    suggestions[ind] <- suggestions[ind] && !as.logical(me[i])
-  }
+  survey <- movieSurvey(indices, movies)
+  similarities <- getSimilarities(survey, df[, indices])
+  suggestions <- getSuggestions(df, similarities, survey, indices)
 
   cat("\n********************************************************\n")
   cat("System strongly recommend to you the following title(s):")
@@ -96,17 +114,19 @@ printMenu <- function () {
 }
 
 args <- commandArgs(trailingOnly = TRUE)
+
 if (length(args) == 1 & identical(args[1], "--test")) {
   # Create a fake dataset with some data
-  movies <- c("Saving Private Ryan", "Underworld", "Jurassic World",  "Platoon",  "Pulp Fiction",
-              "Jumanji", "Toy Story", "Star Wars")
+  movies <- c("Saving Private Ryan", "Underworld", "Jurassic World",  "Platoon",  "Pulp Fiction", "Jumanji", "Toy Story", "Star Wars")
   df <- data.frame(matrix(NA, nrow=3, ncol=length(movies)))
   colnames(df) <- movies
   rownames(df) <- c("David", "Zach", "Jose")
   df["David", ] <- c(1, 0, 0, 1, 1, 0, 0, 0)
   df["Zach", ] <- c(0, 1, 1, 0, 0, 0, 0, 1)
   df["Jose", ] <- c(0, 0, 0, 0, 1, 1, 0, 0)
-} else {
+}
+
+if (length(args) == 0) {
   # By default, read dataset from file
   df <- read.csv("movie_ratings.csv", header=T, row.names=1, check.names=F)
   movies <- as.array(colnames(df))
